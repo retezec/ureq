@@ -125,6 +125,11 @@ fn try_connect_with<T>(
     // The most recent per-address failure, so that a host whose every address
     // fails reports what actually happened instead of a synthesized refusal.
     let mut last_err: Option<Error> = None;
+    // Whether an attempt timed out. Each address gets a share of the budget
+    // rounded down to whole milliseconds, so after the last attempt times out
+    // the time elapsed need not exceed the budget; the loop then ends, and
+    // the connect timed out (the whole budget's reason), not the last error.
+    let mut timed_out = false;
 
     for addr in addrs {
         // Calculate this address's timeout using geometric series.
@@ -149,6 +154,7 @@ fn try_connect_with<T>(
                 if elapsed > timeout.after {
                     return Err(Error::Timeout(timeout.reason));
                 }
+                timed_out = true;
 
                 // We still got time to try the next address.
                 last_err = Some(e);
@@ -162,6 +168,9 @@ fn try_connect_with<T>(
     }
 
     debug!("Failed to connect to any resolved address");
+    if timed_out {
+        return Err(Error::Timeout(timeout.reason));
+    }
     Err(last_err.unwrap_or_else(|| {
         Error::Io(io::Error::new(
             io::ErrorKind::ConnectionRefused,
