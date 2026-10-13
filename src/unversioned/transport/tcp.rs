@@ -84,6 +84,12 @@ fn try_connect(
     // Start with weight 1.0 for the first address, then halve for each subsequent.
     let mut weight = 1.0_f64;
 
+    // Whether an attempt timed out. Each address gets a share of the budget
+    // rounded down to whole milliseconds, so after the last attempt times out
+    // the time elapsed need not exceed the budget; the loop then ends, and
+    // the connect timed out rather than being refused.
+    let mut timed_out = false;
+
     for addr in addrs {
         // Calculate this address's timeout using geometric series.
         let per_addr = timeout.not_zero().map(|t| {
@@ -106,6 +112,7 @@ fn try_connect(
                 if elapsed > timeout.after {
                     return Err(Error::Timeout(timeout.reason));
                 }
+                timed_out = true;
 
                 // We still got time to try the next address.
             }
@@ -118,6 +125,9 @@ fn try_connect(
     }
 
     debug!("Failed to connect to any resolved address");
+    if timed_out {
+        return Err(Error::Timeout(timeout.reason));
+    }
     Err(Error::Io(io::Error::new(
         io::ErrorKind::ConnectionRefused,
         "Connection refused",
