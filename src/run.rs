@@ -558,9 +558,11 @@ fn recv_response(
 
         let (amount, maybe_response) = call.try_response(input, allow_partial_redirect)?;
 
-        let check_size = if maybe_response.is_some() {
-            // We got a parsed response, ensure the size is within
-            // configured parameters.
+        let check_size = if maybe_response.is_some() || amount > 0 {
+            // We got a parsed response, or consumed an informational (1xx)
+            // one: ensure the size of that head is within configured
+            // parameters. The input after an interim head is the next
+            // response and its body, which are checked on their own.
             amount
         } else {
             // We did not parse a response, if input is too large,
