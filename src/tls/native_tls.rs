@@ -153,6 +153,23 @@ fn build_connector(tls_config: &TlsConfig) -> Result<CachedNativeTlsConnector, E
             RootCerts::WebPki => {
                 panic!("WebPki is disabled. You need to explicitly configure root certs on Agent");
             }
+            #[cfg(feature = "native-tls-webpki-roots")]
+            RootCerts::WebPkiAnd(extra) => {
+                builder.disable_built_in_roots(true);
+                let certs = webpki_root_certs::TLS_SERVER_ROOT_CERTS
+                    .iter()
+                    .map(|c| c.as_ref());
+                add_valid_der(certs, &mut builder);
+                for cert in extra.iter() {
+                    builder.add_root_certificate(Certificate::from_der(cert.der())?);
+                }
+            }
+            #[cfg(not(feature = "native-tls-webpki-roots"))]
+            RootCerts::WebPkiAnd(_) => {
+                panic!(
+                    "WebPkiAnd needs WebPki. You need to explicitly configure root certs on Agent"
+                );
+            }
         }
     }
 

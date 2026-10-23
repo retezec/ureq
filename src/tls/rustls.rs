@@ -201,6 +201,22 @@ fn build_config(tls_config: &TlsConfig) -> Result<CachedRustlConfig, Error> {
             RootCerts::WebPki => {
                 panic!("WebPki is disabled. You need to explicitly configure root certs on Agent");
             }
+            #[cfg(feature = "rustls-webpki-roots")]
+            RootCerts::WebPkiAnd(certs) => {
+                let mut root_store = RootCertStore {
+                    roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+                };
+                for cert in certs.iter() {
+                    root_store.add(CertificateDer::from(cert.der()))?;
+                }
+                builder.with_root_certificates(root_store)
+            }
+            #[cfg(not(feature = "rustls-webpki-roots"))]
+            RootCerts::WebPkiAnd(_) => {
+                panic!(
+                    "WebPkiAnd needs WebPki. You need to explicitly configure root certs on Agent"
+                );
+            }
         }
     };
 
@@ -339,5 +355,32 @@ impl fmt::Debug for RustlsTransport {
         f.debug_struct("RustlsTransport")
             .field("chained", &self.stream.sock.inner())
             .finish()
+    }
+}
+
+#[cfg(all(test, feature = "rustls-webpki-roots"))]
+mod tests {
+    use super::*;
+    use crate::tls::{Certificate, TlsConfig};
+
+    /// `WebPkiAnd` keeps Mozilla's roots and refuses a certificate it cannot
+    /// add as a trust anchor, where `Specific` skips it.
+    #[test]
+    fn webpki_and_is_strict_and_keeps_the_mozilla_roots() {
+        let config = |roots: RootCerts| TlsConfig::builder().root_certs(roots).build();
+        let garbage = Certificate::from_der(&[0x30, 0x03, 0x02, 0x01, 0x00]).to_owned();
+
+        assert!(build_config(&config(RootCerts::WebPkiAnd(Arc::new(vec![])))).is_ok());
+        assert!(
+            build_config(&config(RootCerts::WebPkiAnd(Arc::new(vec![
+                garbage.clone()
+            ]))))
+            .is_err(),
+            "WebPkiAnd refuses a certificate it cannot add"
+        );
+        assert!(
+            build_config(&config(RootCerts::Specific(Arc::new(vec![garbage])))).is_ok(),
+            "Specific skips it, as before"
+        );
     }
 }

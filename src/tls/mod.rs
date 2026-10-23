@@ -309,6 +309,13 @@ pub enum RootCerts {
     ///
     /// This is the default value.
     WebPki,
+
+    /// Mozilla's root certificates, as [`RootCerts::WebPki`], plus these as
+    /// further trust anchors.
+    ///
+    /// Unlike [`RootCerts::Specific`], a certificate that cannot be added as a
+    /// trust anchor fails the configuration rather than being skipped.
+    WebPkiAnd(Arc<Vec<Certificate<'static>>>),
 }
 
 impl RootCerts {
