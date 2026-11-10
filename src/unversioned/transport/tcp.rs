@@ -336,6 +336,11 @@ impl Transport for TcpTransport {
         )?;
 
         let input = self.buffers.input_append_buf();
+        // A zero-length socket read can block on Windows. The parser must
+        // handle the buffered input before the transport can read more.
+        if input.is_empty() {
+            return Ok(false);
+        }
         let started = time::Instant::now();
         let mut stream = &*self.stream;
         let result = read_retrying_interrupts(
