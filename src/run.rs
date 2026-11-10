@@ -450,7 +450,7 @@ fn await_100(
         }
 
         match connection.maybe_await_input(timeout) {
-            Ok(_) => {
+            Ok(made_progress) => {
                 let input = connection.buffers().input();
                 if input.is_empty() {
                     return Err(Error::disconnected("await_100 empty input"));
@@ -460,6 +460,9 @@ fn await_100(
                 if amount > 0 {
                     connection.consume_input(amount);
                     break;
+                }
+                if !made_progress && call.can_keep_await_100() {
+                    return Err(Error::disconnected("await_100 made no progress"));
                 }
             }
             Err(Error::Timeout(_)) => {
