@@ -234,6 +234,11 @@ impl Transport for TcpTransport {
         )?;
 
         let input = self.buffers.input_append_buf();
+        // A zero-length socket read can block on Windows. The parser must
+        // handle the buffered input before the transport can read more.
+        if input.is_empty() {
+            return Ok(false);
+        }
         let amount = match self.stream.read(input).normalize_would_block() {
             Ok(v) => Ok(v),
             Err(e) if e.kind() == io::ErrorKind::TimedOut => Err(Error::Timeout(timeout.reason)),
